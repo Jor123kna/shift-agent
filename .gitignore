@@ -1,0 +1,21 @@
+# Compiled programs and build files
+shift-agent
+shift-agent.exe
+*.o
+*.obj
+build/
+
+# Downloaded models and dependencies
+*.gguf
+llama.cpp/
+
+# Local settings and secrets
+.env
+.env.*
+!.env.example
+
+# Generated runtime data
+data/employees.json
+data/shifts.json
+data/notifications.txt
+data/embeddings.json
