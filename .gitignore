@@ -19,3 +19,8 @@ data/employees.json
 data/shifts.json
 data/notifications.txt
 data/embeddings.json
+
+shift-mcp
+data/*.tmp
+
+shift-chat
