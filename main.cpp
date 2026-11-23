@@ -1,10 +1,9 @@
-#include "employee.hpp"
-#include "shift.hpp"
+#include "scheduler.hpp"
 
+#include <exception>
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <vector>
 
 std::string dayName(int day) {
     const std::string names[] = {
@@ -15,7 +14,6 @@ std::string dayName(int day) {
     return names[day - 1];
 }
 
-// Reject invalid input, such as letters or "12abc".
 bool readNumber(const std::string& prompt, int& number) {
     std::string line;
 
@@ -37,34 +35,8 @@ bool readNumber(const std::string& prompt, int& number) {
     }
 }
 
-bool canAssign(const Employee& employee,
-               const Shift& requested,
-               const std::vector<Shift>& shifts) {
-
-    if (requested.isAssigned()) {
-        return false;
-    }
-
-    if (!employee.isAvailable(requested.getDay(),
-                              requested.getStartHour(),
-                              requested.getEndHour())) {
-        return false;
-    }
-
-    for (const Shift& existing : shifts) {
-        if (existing.getEmployeeId() == employee.getId() &&
-            existing.overlaps(requested)) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-void showSchedule(const std::vector<Shift>& shifts,
-                  const std::vector<Employee>& employees) {
-
-    for (const Shift& shift : shifts) {
+void showSchedule(const Scheduler& scheduler) {
+    for (const Shift& shift : scheduler.getShifts()) {
         std::cout << "Shift " << shift.getId()
                   << ": " << dayName(shift.getDay())
                   << " " << shift.getStartHour() << ":00-"
@@ -73,9 +45,10 @@ void showSchedule(const std::vector<Shift>& shifts,
         if (!shift.isAssigned()) {
             std::cout << "Unassigned";
         } else {
-            for (const Employee& employee : employees) {
+            for (const Employee& employee : scheduler.getEmployees()) {
                 if (employee.getId() == shift.getEmployeeId()) {
                     std::cout << employee.getName();
+                    break;
                 }
             }
         }
@@ -84,24 +57,7 @@ void showSchedule(const std::vector<Shift>& shifts,
     }
 }
 
-int main() {
-    std::vector<Employee> employees = {
-        Employee(1, "Alex"),
-        Employee(2, "Sam"),
-        Employee(3, "Taylor")
-    };
-
-    // Example availability for Friday.
-    employees[0].addAvailability(5, 9, 17);
-    employees[1].addAvailability(5, 12, 20);
-    employees[2].addAvailability(5, 8, 16);
-
-    std::vector<Shift> shifts = {
-        Shift(1, 5, 9, 13),
-        Shift(2, 5, 12, 16),
-        Shift(3, 5, 16, 20)
-    };
-
+void runMenu(Scheduler& scheduler) {
     while (true) {
         std::cout << "\n--- Employee Scheduler ---\n"
                   << "1. View employees\n"
@@ -113,92 +69,66 @@ int main() {
         int choice;
 
         if (!readNumber("Choose: ", choice) || choice == 0) {
-            break;
+            return;
         }
 
-        if (choice == 1) {
-            for (const Employee& employee : employees) {
-                std::cout << employee.getId() << ": "
-                          << employee.getName() << '\n';
-            }
-        } else if (choice == 2) {
-            showSchedule(shifts, employees);
-        } else if (choice == 3 || choice == 4) {
-            int shiftId;
-
-            if (!readNumber("Shift ID: ", shiftId)) {
-                break;
-            }
-
-            Shift* selected = nullptr;
-
-            for (Shift& shift : shifts) {
-                if (shift.getId() == shiftId) {
-                    selected = &shift;
+        try {
+            if (choice == 1) {
+                for (const Employee& employee : scheduler.getEmployees()) {
+                    std::cout << employee.getId() << ": "
+                              << employee.getName() << '\n';
                 }
-            }
+            } else if (choice == 2) {
+                showSchedule(scheduler);
+            } else if (choice == 3) {
+                int shiftId;
 
-            if (selected == nullptr) {
-                std::cout << "Shift not found.\n";
-                continue;
-            }
-
-            if (selected->isAssigned()) {
-                std::cout << "This shift is already assigned.\n";
-                continue;
-            }
-
-            if (choice == 3) {
-                bool found = false;
-
-                for (const Employee& employee : employees) {
-                    if (canAssign(employee, *selected, shifts)) {
-                        std::cout << employee.getId() << ": "
-                                  << employee.getName() << '\n';
-                        found = true;
-                    }
+                if (!readNumber("Shift ID: ", shiftId)) {
+                    return;
                 }
 
-                if (!found) {
+                std::vector<Employee> available =
+                    scheduler.findAvailableEmployees(shiftId);
+
+                if (available.empty()) {
                     std::cout << "No employees available.\n";
                 }
-            } else {
+
+                for (const Employee& employee : available) {
+                    std::cout << employee.getId() << ": "
+                              << employee.getName() << '\n';
+                }
+            } else if (choice == 4) {
+                int shiftId;
                 int employeeId;
 
-                if (!readNumber("Employee ID: ", employeeId)) {
-                    break;
+                if (!readNumber("Shift ID: ", shiftId) ||
+                    !readNumber("Employee ID: ", employeeId)) {
+                    return;
                 }
 
-                const Employee* selectedEmployee = nullptr;
-
-                for (const Employee& employee : employees) {
-                    if (employee.getId() == employeeId) {
-                        selectedEmployee = &employee;
-                    }
-                }
-
-                if (selectedEmployee == nullptr) {
-                    std::cout << "Employee not found.\n";
-                } else if (!canAssign(*selectedEmployee,
-                                      *selected, shifts)) {
-                    std::cout
-                        << "Cannot assign: unavailable or overlapping shift.\n";
-                } else if (selected->assignEmployee(employeeId)) {
-                    std::cout << "Shift assigned.\n";
-
-                    std::cout << "\n[Simulated email]\n"
-                              << "Hello "
-                              << selectedEmployee->getName()
-                              << ", you are scheduled on "
-                              << dayName(selected->getDay())
-                              << " from "
-                              << selected->getStartHour() << ":00 to "
-                              << selected->getEndHour() << ":00.\n";
-                }
+                std::cout << scheduler.assignShift(employeeId, shiftId);
+            } else {
+                std::cout << "Please choose an option from 0 to 4.\n";
             }
-        } else {
-            std::cout << "Please choose an option from 0 to 4.\n";
+        } catch (const std::exception& error) {
+            std::cout << "Error: " << error.what() << '\n';
         }
+    }
+}
+
+int main() {
+    try {
+        Scheduler scheduler(
+            "data/employees.json",
+            "data/shifts.json"
+        );
+
+        runMenu(scheduler);
+    } catch (const std::exception& error) {
+        std::cerr << "Could not start scheduler: "
+                  << error.what() << '\n';
+        return 1;
     }
 
     return 0;
